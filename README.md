@@ -38,16 +38,18 @@ The API will be available at `http://localhost:3001`.
 
 ## Deployment (Railway)
 
-1. Push this directory to a Git repository.
-2. Create a new Railway project, connect the repository.
-3. Add a PostgreSQL plugin (Railway will provide `DATABASE_URL`).
+1. Push this repository to GitHub.
+2. Create a new Railway project, connect the GitHub repository.
+3. Add a PostgreSQL plugin (Railway will inject `DATABASE_URL`).
 4. Set environment variables in the Railway dashboard:
    - `DATABASE_URL` (auto‑injected by PostgreSQL plugin)
    - `API_KEY` (optional, generate a random string)
    - `PORT` (optional, Railway sets `PORT` automatically)
-5. Deploy. The migration will **not** run automatically; you must run it manually via Railway CLI or add a `postdeploy` script.
+5. Deploy.
 
-To run migration on Railway:
+**Migrations run automatically** after each deployment via the `postdeploy` hook defined in `railway.json`. No manual steps needed.
+
+If you need to run migrations manually (e.g., after schema changes), you can run:
 ```bash
 railway run npm run migrate
 ```
@@ -123,3 +125,4 @@ A future update will add a configuration panel in the dashboard to set the API e
 - The API is designed for a single user (the dashboard owner). Multi‑user support can be added later.
 - If `API_KEY` is not set, authentication is skipped (development only).
 - The migration script creates a default user with a fixed UUID. All data is linked to this user.
+- Migrations are idempotent and safe to run multiple times.
