@@ -295,6 +295,11 @@ app.post('/api/weekly-review', async (req, res) => {
   }
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ name: 'Life Dashboard API', version: '0.1.0', status: 'ok' });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
