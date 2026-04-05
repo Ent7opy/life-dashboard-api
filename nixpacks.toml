@@ -2,13 +2,7 @@
 nixPkgs = ["nodejs-18"]
 
 [phases.install]
-cmds = [
-    "rm -rf node_modules/.cache 2>/dev/null || true",
-    "npm ci"
-]
-
-[phases.build]
-cmds = ["echo 'Build complete'"]
+cmds = ["npm ci"]
 
 [phases.start]
-cmd = "npm start"
+cmd = "node server.js"
