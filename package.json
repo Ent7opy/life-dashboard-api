@@ -1,6 +1,6 @@
 {
   "name": "life-dashboard-api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Backend API for Life Dashboard (PostgreSQL + Express)",
   "main": "server.js",
   "scripts": {

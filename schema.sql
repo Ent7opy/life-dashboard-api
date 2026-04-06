@@ -8,17 +8,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ═══════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS users (
-  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email             TEXT UNIQUE,
-  api_key_hash      TEXT,
-  theme_preference  TEXT CHECK (theme_preference IN ('light','dark','auto')) DEFAULT 'auto',
-  settings          JSONB NOT NULL DEFAULT '{}',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email        TEXT UNIQUE,
+  display_name TEXT NOT NULL DEFAULT 'Vanyo',
+  timezone     TEXT NOT NULL DEFAULT 'Europe/Sofia',
+  theme        TEXT NOT NULL DEFAULT 'solarpunk' CHECK (theme IN ('solarpunk','dark','light')),
+  api_key_hash TEXT,
+  settings     JSONB NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT 'Vanyo';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone     TEXT NOT NULL DEFAULT 'Europe/Sofia';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS theme        TEXT NOT NULL DEFAULT 'solarpunk';
 
 CREATE TABLE IF NOT EXISTS tags (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -200,29 +199,23 @@ CREATE TABLE IF NOT EXISTS projects (
   metadata     JSONB NOT NULL DEFAULT '{}'
 );
 
--- Legacy tasks table + new columns
 CREATE TABLE IF NOT EXISTS tasks (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  label      TEXT NOT NULL,
-  completed  BOOLEAN DEFAULT FALSE,
-  due_date   DATE,
-  phase_id   TEXT,
-  category   TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  notes        TEXT,
+  status       TEXT NOT NULL DEFAULT 'todo',
+  priority     SMALLINT NOT NULL DEFAULT 2,
+  project_id   UUID REFERENCES projects(id) ON DELETE SET NULL,
+  goal_id      UUID REFERENCES goals(id) ON DELETE SET NULL,
+  parent_id    UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  due_date     DATE,
+  completed_at TIMESTAMPTZ,
+  recurrence   TEXT,
+  archived_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title        TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notes        TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status       TEXT NOT NULL DEFAULT 'todo';
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority     SMALLINT NOT NULL DEFAULT 2;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id   UUID REFERENCES projects(id) ON DELETE SET NULL;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS goal_id      UUID REFERENCES goals(id) ON DELETE SET NULL;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_id    UUID REFERENCES tasks(id) ON DELETE CASCADE;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence   TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived_at  TIMESTAMPTZ;
-
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id     ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_status ON tasks(user_id, status, due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks(project_id) WHERE project_id IS NOT NULL;
@@ -495,62 +488,6 @@ CREATE TABLE IF NOT EXISTS hobby_logs (
 );
 
 -- ═══════════════════════════════════════════════
--- LEGACY TABLES (kept for backwards compat)
--- ═══════════════════════════════════════════════
-
-CREATE TABLE IF NOT EXISTS university_path (
-  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  selected_path           TEXT CHECK (selected_path IN ('german','bulgarian','hybrid')) DEFAULT 'german',
-  selected_university_name TEXT,
-  start_year              INTEGER,
-  notes                   TEXT,
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS progress (
-  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  category_id TEXT NOT NULL,
-  value       INTEGER CHECK (value >= 0 AND value <= 100) DEFAULT 0,
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (user_id, category_id)
-);
-
-CREATE TABLE IF NOT EXISTS reading_list (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  book_id      TEXT NOT NULL,
-  status       TEXT CHECK (status IN ('unread','reading','completed')) DEFAULT 'unread',
-  started_at   DATE,
-  completed_at DATE,
-  rating       INTEGER CHECK (rating >= 1 AND rating <= 5),
-  notes        TEXT,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS weekly_review (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  hours      NUMERIC(4,1) CHECK (hours >= 0 AND hours <= 24) DEFAULT 0,
-  reflection TEXT,
-  goals      JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, entry_date)
-);
-
--- ═══════════════════════════════════════════════
--- INDEXES (legacy)
--- ═══════════════════════════════════════════════
-
-CREATE INDEX IF NOT EXISTS idx_reading_list_user_id     ON reading_list(user_id);
-CREATE INDEX IF NOT EXISTS idx_weekly_review_user_id    ON weekly_review(user_id);
-CREATE INDEX IF NOT EXISTS idx_weekly_review_entry_date ON weekly_review(entry_date);
-
--- ═══════════════════════════════════════════════
 -- updated_at TRIGGER FUNCTION
 -- ═══════════════════════════════════════════════
 
@@ -562,7 +499,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- New table triggers
 DROP TRIGGER IF EXISTS trg_users_updated_at          ON users;
 CREATE TRIGGER trg_users_updated_at          BEFORE UPDATE ON users          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 DROP TRIGGER IF EXISTS trg_notes_updated_at           ON notes;
@@ -583,6 +519,8 @@ DROP TRIGGER IF EXISTS trg_goals_updated_at           ON goals;
 CREATE TRIGGER trg_goals_updated_at           BEFORE UPDATE ON goals            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 DROP TRIGGER IF EXISTS trg_projects_updated_at        ON projects;
 CREATE TRIGGER trg_projects_updated_at        BEFORE UPDATE ON projects         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS trg_tasks_updated_at           ON tasks;
+CREATE TRIGGER trg_tasks_updated_at           BEFORE UPDATE ON tasks            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 DROP TRIGGER IF EXISTS trg_habits_updated_at          ON habits;
 CREATE TRIGGER trg_habits_updated_at          BEFORE UPDATE ON habits           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 DROP TRIGGER IF EXISTS trg_health_logs_updated_at     ON health_logs;
@@ -606,21 +544,10 @@ CREATE TRIGGER trg_trips_updated_at           BEFORE UPDATE ON trips            
 DROP TRIGGER IF EXISTS trg_hobbies_updated_at         ON hobbies;
 CREATE TRIGGER trg_hobbies_updated_at         BEFORE UPDATE ON hobbies          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Legacy triggers
-DROP TRIGGER IF EXISTS update_university_path_updated_at ON university_path;
-CREATE TRIGGER update_university_path_updated_at BEFORE UPDATE ON university_path FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
-CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-DROP TRIGGER IF EXISTS update_reading_list_updated_at ON reading_list;
-CREATE TRIGGER update_reading_list_updated_at BEFORE UPDATE ON reading_list FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- ═══════════════════════════════════════════════
 -- DEFAULT USER SEED
 -- ═══════════════════════════════════════════════
 
-INSERT INTO users (id, email, theme_preference, display_name, timezone, theme)
-VALUES ('00000000-0000-0000-0000-000000000000', 'vanyo@example.com', 'auto', 'Vanyo', 'Europe/Sofia', 'solarpunk')
-ON CONFLICT (id) DO UPDATE SET
-  display_name = EXCLUDED.display_name,
-  timezone     = EXCLUDED.timezone,
-  theme        = EXCLUDED.theme;
+INSERT INTO users (id, email, display_name, timezone, theme)
+VALUES ('00000000-0000-0000-0000-000000000000', 'vanyo@example.com', 'Vanyo', 'Europe/Sofia', 'solarpunk')
+ON CONFLICT (id) DO NOTHING;

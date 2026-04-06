@@ -26,8 +26,7 @@ router.get('/', async (req, res, next) => {
 
 // POST / — create task
 router.post('/', validate(z.object({
-  title:      z.string().optional(),
-  label:      z.string().optional(),
+  title:      z.string({ required_error: 'title is required' }).min(1),
   status:     z.string().optional(),
   priority:   z.number().int().min(1).max(4).optional(),
   due_date:   z.string().optional(),
@@ -36,19 +35,17 @@ router.post('/', validate(z.object({
   goal_id:    z.string().uuid().optional(),
   parent_id:  z.string().uuid().optional(),
   recurrence: z.string().optional(),
-  phase_id:   z.string().optional(),
-  category:   z.string().optional(),
-}).refine(d => d.title || d.label, { message: 'title or label required' })),
+})),
 async (req, res, next) => {
-  const { title, label, status, priority, due_date, notes, project_id, goal_id,
-          parent_id, recurrence, phase_id, category } = req.body;
+  const { title, status, priority, due_date, notes, project_id, goal_id,
+          parent_id, recurrence } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO tasks (user_id, label, title, status, priority, due_date, notes,
-        project_id, goal_id, parent_id, recurrence, phase_id, category)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [UID, label || title, title || label, status || 'todo', priority || 2,
-       due_date, notes, project_id, goal_id, parent_id, recurrence, phase_id, category]
+      `INSERT INTO tasks (user_id, title, status, priority, due_date, notes,
+        project_id, goal_id, parent_id, recurrence)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [UID, title, status || 'todo', priority || 2,
+       due_date, notes, project_id, goal_id, parent_id, recurrence]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -68,27 +65,24 @@ router.get('/:id', async (req, res, next) => {
 
 // PATCH /:id — partial update
 router.patch('/:id', async (req, res, next) => {
-  const { title, label, status, priority, completed, due_date, notes,
+  const { title, status, priority, due_date, notes,
           project_id, goal_id } = req.body;
   try {
-    // If marking done, set completed_at if not already set
     const completedAtClause = status === 'done'
       ? ', completed_at = COALESCE(completed_at, NOW())'
       : '';
     const { rows } = await pool.query(
       `UPDATE tasks SET
         title      = COALESCE($1, title),
-        label      = COALESCE($2, label),
-        status     = COALESCE($3, status),
-        priority   = COALESCE($4, priority),
-        completed  = COALESCE($5, completed),
-        due_date   = COALESCE($6, due_date),
-        notes      = COALESCE($7, notes),
-        project_id = COALESCE($8, project_id),
-        goal_id    = COALESCE($9, goal_id)
+        status     = COALESCE($2, status),
+        priority   = COALESCE($3, priority),
+        due_date   = COALESCE($4, due_date),
+        notes      = COALESCE($5, notes),
+        project_id = COALESCE($6, project_id),
+        goal_id    = COALESCE($7, goal_id)
         ${completedAtClause}
-       WHERE id = $10 AND user_id = $11 RETURNING *`,
-      [title, label, status, priority, completed, due_date, notes,
+       WHERE id = $8 AND user_id = $9 RETURNING *`,
+      [title, status, priority, due_date, notes,
        project_id, goal_id, req.params.id, UID]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Task not found' });
