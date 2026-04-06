@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list entries
 router.get('/', async (req, res, next) => {
@@ -12,7 +11,7 @@ router.get('/', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM journal_entries WHERE user_id = $1 AND archived_at IS NULL
        ORDER BY entry_date DESC LIMIT $2`,
-      [UID, limit]
+      [req.user.id, limit]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -39,7 +38,7 @@ router.post('/', validate(z.object({
          prompts  = EXCLUDED.prompts,
          metadata = EXCLUDED.metadata
        RETURNING *`,
-      [UID, entry_date, body, mood, energy,
+      [req.user.id, entry_date, body, mood, energy,
        prompts ? JSON.stringify(prompts) : '{}',
        metadata ? JSON.stringify(metadata) : '{}']
     );
@@ -52,7 +51,7 @@ router.get('/:date', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM journal_entries WHERE user_id = $1 AND entry_date = $2 AND archived_at IS NULL`,
-      [UID, req.params.date]
+      [req.user.id, req.params.date]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Entry not found' });
     res.json(rows[0]);
@@ -74,7 +73,7 @@ router.patch('/:date', async (req, res, next) => {
       [body, mood, energy,
        prompts ? JSON.stringify(prompts) : null,
        metadata ? JSON.stringify(metadata) : null,
-       UID, req.params.date]
+       req.user.id, req.params.date]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Entry not found' });
     res.json(rows[0]);

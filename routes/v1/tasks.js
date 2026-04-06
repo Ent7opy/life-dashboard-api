@@ -3,14 +3,13 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list tasks with filters
 router.get('/', async (req, res, next) => {
   const { status, project_id, due } = req.query;
   try {
     let query = 'SELECT * FROM tasks WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (status)     { params.push(status);     query += ` AND status = $${params.length}`; }
     if (project_id) { params.push(project_id); query += ` AND project_id = $${params.length}`; }
     if (due === 'today') {
@@ -44,7 +43,7 @@ async (req, res, next) => {
       `INSERT INTO tasks (user_id, title, status, priority, due_date, notes,
         project_id, goal_id, parent_id, recurrence)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [UID, title, status || 'todo', priority || 2,
+      [req.user.id, title, status || 'todo', priority || 2,
        due_date, notes, project_id, goal_id, parent_id, recurrence]
     );
     res.status(201).json(rows[0]);
@@ -56,7 +55,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM tasks WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Task not found' });
     res.json(rows[0]);
@@ -83,7 +82,7 @@ router.patch('/:id', async (req, res, next) => {
         ${completedAtClause}
        WHERE id = $8 AND user_id = $9 RETURNING *`,
       [title, status, priority, due_date, notes,
-       project_id, goal_id, req.params.id, UID]
+       project_id, goal_id, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Task not found' });
     res.json(rows[0]);
@@ -95,7 +94,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE tasks SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }

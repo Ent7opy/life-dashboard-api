@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — unprocessed items
 router.get('/', async (req, res, next) => {
@@ -11,7 +10,7 @@ router.get('/', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM inbox_items WHERE user_id = $1 AND processed = FALSE AND archived_at IS NULL
        ORDER BY created_at DESC`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -22,7 +21,7 @@ router.get('/all', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM inbox_items WHERE user_id = $1 AND archived_at IS NULL ORDER BY created_at DESC`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -37,7 +36,7 @@ router.post('/', validate(z.object({
   try {
     const { rows } = await pool.query(
       `INSERT INTO inbox_items (user_id, content, metadata) VALUES ($1,$2,$3) RETURNING *`,
-      [UID, content, metadata ? JSON.stringify(metadata) : '{}']
+      [req.user.id, content, metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -52,7 +51,7 @@ router.patch('/:id', async (req, res, next) => {
         content   = COALESCE($1, content),
         processed = COALESCE($2, processed)
        WHERE id = $3 AND user_id = $4 RETURNING *`,
-      [content, processed, req.params.id, UID]
+      [content, processed, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
     res.json(rows[0]);
@@ -66,7 +65,7 @@ router.post('/:id/process', async (req, res, next) => {
     const { rows } = await pool.query(
       `UPDATE inbox_items SET processed = TRUE, routed_to = $1, routed_id = $2
        WHERE id = $3 AND user_id = $4 RETURNING *`,
-      [routed_to, routed_id, req.params.id, UID]
+      [routed_to, routed_id, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
     res.json(rows[0]);
@@ -78,7 +77,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE inbox_items SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }

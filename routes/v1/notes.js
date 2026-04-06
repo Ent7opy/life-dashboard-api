@@ -3,14 +3,13 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list notes
 router.get('/', async (req, res, next) => {
   const { entity_type, entity_id, pinned } = req.query;
   try {
     let query = 'SELECT * FROM notes WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (entity_type) { params.push(entity_type); query += ` AND entity_type = $${params.length}`; }
     if (entity_id)   { params.push(entity_id);   query += ` AND entity_id = $${params.length}`; }
     if (pinned !== undefined) { params.push(pinned === 'true'); query += ` AND pinned = $${params.length}`; }
@@ -36,7 +35,7 @@ async (req, res, next) => {
     const { rows } = await pool.query(
       `INSERT INTO notes (user_id, title, body, format, entity_type, entity_id, pinned, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [UID, title, body, format || 'markdown', entity_type, entity_id, pinned || false,
+      [req.user.id, title, body, format || 'markdown', entity_type, entity_id, pinned || false,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -48,7 +47,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM notes WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Note not found' });
     res.json(rows[0]);
@@ -70,7 +69,7 @@ router.patch('/:id', async (req, res, next) => {
         metadata    = COALESCE($7, metadata)
        WHERE id = $8 AND user_id = $9 RETURNING *`,
       [title, body, format, entity_type, entity_id, pinned,
-       metadata ? JSON.stringify(metadata) : null, req.params.id, UID]
+       metadata ? JSON.stringify(metadata) : null, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Note not found' });
     res.json(rows[0]);
@@ -82,7 +81,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE notes SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }

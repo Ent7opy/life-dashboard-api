@@ -3,12 +3,11 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — get user row
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [UID]);
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) { next(err); }
@@ -30,7 +29,7 @@ router.patch('/', validate(z.object({
         theme        = COALESCE($3, theme),
         settings     = COALESCE($4, settings)
        WHERE id = $5 RETURNING *`,
-      [display_name, timezone, theme, settings ? JSON.stringify(settings) : null, UID]
+      [display_name, timezone, theme, settings ? JSON.stringify(settings) : null, req.user.id]
     );
     res.json(rows[0]);
   } catch (err) { next(err); }

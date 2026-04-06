@@ -1,4 +1,11 @@
 const router = require('express').Router();
+const { requireAuth } = require('../../middleware/requireAuth');
+
+// Auth routes — public (no token required)
+router.use('/auth', require('./auth'));
+
+// All routes below require a valid JWT
+router.use(requireAuth);
 
 router.use('/user',      require('./user'));
 router.use('/tags',      require('./tags'));

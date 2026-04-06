@@ -3,14 +3,13 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list projects
 router.get('/', async (req, res, next) => {
   const { status } = req.query;
   try {
     let query = 'SELECT * FROM projects WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (status) { params.push(status); query += ` AND status = $${params.length}`; }
     query += ' ORDER BY sort_order, created_at DESC';
     const { rows } = await pool.query(query, params);
@@ -39,7 +38,7 @@ router.post('/', validate(z.object({
       `INSERT INTO projects (user_id, name, description, status, type, url, repo_url,
         start_date, target_date, goal_id, sort_order, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [UID, name, description, status || 'active', type, url, repo_url,
+      [req.user.id, name, description, status || 'active', type, url, repo_url,
        start_date, target_date, goal_id, sort_order || 0,
        metadata ? JSON.stringify(metadata) : '{}']
     );
@@ -52,7 +51,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM projects WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
     res.json(rows[0]);
@@ -82,7 +81,7 @@ router.patch('/:id', async (req, res, next) => {
       [name, description, status, type, url, repo_url, start_date, target_date,
        completed_at, goal_id, sort_order,
        metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
     res.json(rows[0]);
@@ -94,7 +93,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE projects SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -106,7 +105,7 @@ router.get('/:id/tasks', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM tasks WHERE project_id = $1 AND user_id = $2 AND archived_at IS NULL
        ORDER BY priority DESC, created_at`,
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }

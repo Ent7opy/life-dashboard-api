@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET /logs/today — habits with done boolean for today
 router.get('/logs/today', async (req, res, next) => {
@@ -14,7 +13,7 @@ router.get('/logs/today', async (req, res, next) => {
        LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.log_date = CURRENT_DATE
        WHERE h.user_id = $1 AND h.active = TRUE AND h.archived_at IS NULL
        ORDER BY h.name`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -25,7 +24,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM habits WHERE user_id = $1 AND active = TRUE AND archived_at IS NULL ORDER BY name`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -47,7 +46,7 @@ router.post('/', validate(z.object({
     const { rows } = await pool.query(
       `INSERT INTO habits (user_id, name, description, frequency, target_count, color, icon, goal_id, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [UID, name, description, frequency || 'daily', target_count || 1,
+      [req.user.id, name, description, frequency || 'daily', target_count || 1,
        color, icon, goal_id, metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -72,7 +71,7 @@ router.patch('/:id', async (req, res, next) => {
        WHERE id = $10 AND user_id = $11 RETURNING *`,
       [name, description, frequency, target_count, color, icon, active, goal_id,
        metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Habit not found' });
     res.json(rows[0]);
@@ -84,7 +83,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE habits SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -97,7 +96,7 @@ router.get('/:id/logs', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM habit_logs WHERE habit_id = $1 AND user_id = $2
        ORDER BY log_date DESC LIMIT $3`,
-      [req.params.id, UID, limit]
+      [req.params.id, req.user.id, limit]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -118,7 +117,7 @@ router.post('/:id/logs', validate(z.object({
          count = EXCLUDED.count,
          note  = EXCLUDED.note
        RETURNING *`,
-      [req.params.id, UID, log_date, count || 1, note]
+      [req.params.id, req.user.id, log_date, count || 1, note]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }

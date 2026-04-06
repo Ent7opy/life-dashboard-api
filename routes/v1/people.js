@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET /due — overdue keep_in_touch contacts
 router.get('/due', async (req, res, next) => {
@@ -18,7 +17,7 @@ router.get('/due', async (req, res, next) => {
            OR (keep_in_touch_freq = 'quarterly' AND last_contact < NOW() - INTERVAL '90 days')
          )
        ORDER BY last_contact ASC NULLS FIRST`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -29,7 +28,7 @@ router.get('/', async (req, res, next) => {
   const { relationship } = req.query;
   try {
     let query = 'SELECT * FROM contacts WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (relationship) { params.push(relationship); query += ` AND relationship = $${params.length}`; }
     query += ' ORDER BY name';
     const { rows } = await pool.query(query, params);
@@ -57,7 +56,7 @@ router.post('/', validate(z.object({
       `INSERT INTO contacts (user_id, name, relationship, email, phone, location, birthday,
         avatar_url, notes, keep_in_touch_freq, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [UID, name, relationship, email, phone, location, birthday,
+      [req.user.id, name, relationship, email, phone, location, birthday,
        avatar_url, notes, keep_in_touch_freq,
        metadata ? JSON.stringify(metadata) : '{}']
     );
@@ -70,7 +69,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM contacts WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Contact not found' });
     res.json(rows[0]);
@@ -98,7 +97,7 @@ router.patch('/:id', async (req, res, next) => {
        WHERE id = $12 AND user_id = $13 RETURNING *`,
       [name, relationship, email, phone, location, birthday, avatar_url, notes,
        keep_in_touch_freq, last_contact, metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Contact not found' });
     res.json(rows[0]);
@@ -110,7 +109,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE contacts SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -122,7 +121,7 @@ router.get('/:id/interactions', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM interactions WHERE contact_id = $1 AND user_id = $2
        ORDER BY date DESC`,
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -142,12 +141,12 @@ router.post('/:id/interactions', validate(z.object({
     const { rows } = await client.query(
       `INSERT INTO interactions (user_id, contact_id, type, date, summary, metadata)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [UID, req.params.id, type, date || null, summary,
+      [req.user.id, req.params.id, type, date || null, summary,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     await client.query(
       `UPDATE contacts SET last_contact = CURRENT_DATE WHERE id = $1 AND user_id = $2`,
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     await client.query('COMMIT');
     res.status(201).json(rows[0]);

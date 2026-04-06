@@ -3,12 +3,11 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list all tags
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM tags WHERE user_id = $1 ORDER BY name', [UID]);
+    const { rows } = await pool.query('SELECT * FROM tags WHERE user_id = $1 ORDER BY name', [req.user.id]);
     res.json(rows);
   } catch (err) { next(err); }
 });
@@ -22,7 +21,7 @@ router.post('/', validate(z.object({
   try {
     const { rows } = await pool.query(
       `INSERT INTO tags (user_id, name, color) VALUES ($1,$2,$3) RETURNING *`,
-      [UID, name, color]
+      [req.user.id, name, color]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -38,7 +37,7 @@ router.patch('/:id', validate(z.object({
     const { rows } = await pool.query(
       `UPDATE tags SET name = COALESCE($1, name), color = COALESCE($2, color)
        WHERE id = $3 AND user_id = $4 RETURNING *`,
-      [name, color, req.params.id, UID]
+      [name, color, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tag not found' });
     res.json(rows[0]);
@@ -48,7 +47,7 @@ router.patch('/:id', validate(z.object({
 // DELETE /:id — hard delete
 router.delete('/:id', async (req, res, next) => {
   try {
-    await pool.query('DELETE FROM tags WHERE id = $1 AND user_id = $2', [req.params.id, UID]);
+    await pool.query('DELETE FROM tags WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     res.status(204).send();
   } catch (err) { next(err); }
 });

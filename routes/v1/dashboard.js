@@ -1,7 +1,6 @@
 const router = require('express').Router();
 const { pool } = require('../../db/pool');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — aggregated dashboard data
 router.get('/', async (req, res, next) => {
@@ -22,7 +21,7 @@ router.get('/', async (req, res, next) => {
       // Journal entry for today
       pool.query(
         `SELECT * FROM journal_entries WHERE user_id = $1 AND entry_date = CURRENT_DATE AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
       // Habits with done boolean for today
       pool.query(
@@ -31,19 +30,19 @@ router.get('/', async (req, res, next) => {
          LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.log_date = CURRENT_DATE
          WHERE h.user_id = $1 AND h.active = TRUE AND h.archived_at IS NULL
          ORDER BY h.name`,
-        [UID]
+        [req.user.id]
       ),
       // Health log for today
       pool.query(
         `SELECT * FROM health_logs WHERE user_id = $1 AND log_date = CURRENT_DATE`,
-        [UID]
+        [req.user.id]
       ),
       // Weekly review for current week (week_start = most recent Monday)
       pool.query(
         `SELECT * FROM weekly_reviews
          WHERE user_id = $1 AND archived_at IS NULL
            AND week_start = DATE_TRUNC('week', CURRENT_DATE)::DATE`,
-        [UID]
+        [req.user.id]
       ),
       // Tasks due this week not done
       pool.query(
@@ -52,22 +51,22 @@ router.get('/', async (req, res, next) => {
            AND due_date <= CURRENT_DATE
            AND status != 'done'
          ORDER BY due_date ASC, priority DESC`,
-        [UID]
+        [req.user.id]
       ),
       // Active projects count
       pool.query(
         `SELECT COUNT(*) FROM projects WHERE user_id = $1 AND status = 'active' AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
       // Active goals count
       pool.query(
         `SELECT COUNT(*) FROM goals WHERE user_id = $1 AND status = 'active' AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
       // Inbox unprocessed count
       pool.query(
         `SELECT COUNT(*) FROM inbox_items WHERE user_id = $1 AND processed = FALSE AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
       // Overdue contacts count
       pool.query(
@@ -79,17 +78,17 @@ router.get('/', async (req, res, next) => {
              OR (keep_in_touch_freq = 'monthly'   AND last_contact < NOW() - INTERVAL '30 days')
              OR (keep_in_touch_freq = 'quarterly' AND last_contact < NOW() - INTERVAL '90 days')
            )`,
-        [UID]
+        [req.user.id]
       ),
       // Skills count
       pool.query(
         `SELECT COUNT(*) FROM skills WHERE user_id = $1 AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
       // Active resources count
       pool.query(
         `SELECT COUNT(*) FROM resources WHERE user_id = $1 AND status = 'active' AND archived_at IS NULL`,
-        [UID]
+        [req.user.id]
       ),
     ]);
 

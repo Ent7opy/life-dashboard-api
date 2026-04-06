@@ -8,16 +8,28 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ═══════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS users (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email        TEXT UNIQUE,
-  display_name TEXT NOT NULL DEFAULT 'Vanyo',
-  timezone     TEXT NOT NULL DEFAULT 'Europe/Sofia',
-  theme        TEXT NOT NULL DEFAULT 'solarpunk' CHECK (theme IN ('solarpunk','dark','light')),
-  api_key_hash TEXT,
-  settings     JSONB NOT NULL DEFAULT '{}',
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email                 TEXT UNIQUE NOT NULL,
+  display_name          TEXT NOT NULL DEFAULT 'Friend',
+  timezone              TEXT NOT NULL DEFAULT 'Europe/Sofia',
+  theme                 TEXT NOT NULL DEFAULT 'solarpunk' CHECK (theme IN ('solarpunk','dark','light')),
+  password_hash         TEXT,
+  email_verified        BOOLEAN NOT NULL DEFAULT FALSE,
+  verify_token          TEXT,
+  verify_token_expires  TIMESTAMPTZ,
+  reset_token           TEXT,
+  reset_token_expires   TIMESTAMPTZ,
+  settings              JSONB NOT NULL DEFAULT '{}',
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash        TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified       BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token         TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expires TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token          TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires  TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS tags (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -544,10 +556,3 @@ CREATE TRIGGER trg_trips_updated_at           BEFORE UPDATE ON trips            
 DROP TRIGGER IF EXISTS trg_hobbies_updated_at         ON hobbies;
 CREATE TRIGGER trg_hobbies_updated_at         BEFORE UPDATE ON hobbies          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- ═══════════════════════════════════════════════
--- DEFAULT USER SEED
--- ═══════════════════════════════════════════════
-
-INSERT INTO users (id, email, display_name, timezone, theme)
-VALUES ('00000000-0000-0000-0000-000000000000', 'vanyo@example.com', 'Vanyo', 'Europe/Sofia', 'solarpunk')
-ON CONFLICT (id) DO NOTHING;

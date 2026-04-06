@@ -3,14 +3,13 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list goals
 router.get('/', async (req, res, next) => {
   const { status, timeframe } = req.query;
   try {
     let query = 'SELECT * FROM goals WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (status)    { params.push(status);    query += ` AND status = $${params.length}`; }
     if (timeframe) { params.push(timeframe); query += ` AND timeframe = $${params.length}`; }
     query += ' ORDER BY created_at DESC';
@@ -40,7 +39,7 @@ router.post('/', validate(z.object({
       `INSERT INTO goals (user_id, title, description, type, timeframe, status, target_date,
         metric_name, metric_target, metric_current, parent_id, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [UID, title, description, type || 'outcome', timeframe || 'quarterly',
+      [req.user.id, title, description, type || 'outcome', timeframe || 'quarterly',
        status || 'active', target_date, metric_name, metric_target,
        metric_current || 0, parent_id, metadata ? JSON.stringify(metadata) : '{}']
     );
@@ -53,7 +52,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM goals WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Goal not found' });
     res.json(rows[0]);
@@ -82,7 +81,7 @@ router.patch('/:id', async (req, res, next) => {
       [title, description, type, timeframe, status, target_date, metric_name,
        metric_target, metric_current, parent_id,
        metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Goal not found' });
     res.json(rows[0]);
@@ -94,7 +93,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE goals SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -105,7 +104,7 @@ router.get('/:id/children', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM goals WHERE parent_id = $1 AND user_id = $2 AND archived_at IS NULL ORDER BY created_at',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }

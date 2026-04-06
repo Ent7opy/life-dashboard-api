@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // ── ACCOUNTS ──────────────────────────────────────────────────
 
@@ -11,7 +10,7 @@ router.get('/accounts', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM accounts WHERE user_id = $1 AND archived_at IS NULL ORDER BY name`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -30,7 +29,7 @@ router.post('/accounts', validate(z.object({
     const { rows } = await pool.query(
       `INSERT INTO accounts (user_id, name, type, currency, balance, institution, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [UID, name, type, currency || 'EUR', balance || 0, institution,
+      [req.user.id, name, type, currency || 'EUR', balance || 0, institution,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -51,7 +50,7 @@ router.patch('/accounts/:id', async (req, res, next) => {
        WHERE id = $7 AND user_id = $8 RETURNING *`,
       [name, type, currency, balance, institution,
        metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
     res.json(rows[0]);
@@ -62,7 +61,7 @@ router.delete('/accounts/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE accounts SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -74,7 +73,7 @@ router.get('/transactions', async (req, res, next) => {
   const { account_id, category, type, from, to } = req.query;
   try {
     let query = 'SELECT * FROM transactions WHERE user_id = $1 AND archived_at IS NULL';
-    const params = [UID];
+    const params = [req.user.id];
     if (account_id) { params.push(account_id); query += ` AND account_id = $${params.length}`; }
     if (category)   { params.push(category);   query += ` AND category = $${params.length}`; }
     if (type)       { params.push(type);        query += ` AND type = $${params.length}`; }
@@ -106,7 +105,7 @@ router.post('/transactions', validate(z.object({
       `INSERT INTO transactions (user_id, account_id, amount, type, currency, category,
         subcategory, description, txn_date, to_account_id, recurring, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [UID, account_id, amount, type, currency || 'EUR', category, subcategory,
+      [req.user.id, account_id, amount, type, currency || 'EUR', category, subcategory,
        description, txn_date || null, to_account_id, recurring || false,
        metadata ? JSON.stringify(metadata) : '{}']
     );
@@ -133,7 +132,7 @@ router.patch('/transactions/:id', async (req, res, next) => {
        WHERE id = $11 AND user_id = $12 RETURNING *`,
       [amount, type, currency, category, subcategory, description, txn_date,
        to_account_id, recurring, metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Transaction not found' });
     res.json(rows[0]);
@@ -144,7 +143,7 @@ router.delete('/transactions/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE transactions SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }
@@ -156,7 +155,7 @@ router.get('/budgets', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM budgets WHERE user_id = $1 AND active = TRUE ORDER BY category',
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -182,7 +181,7 @@ router.put('/budgets', validate(z.array(z.object({
            currency = EXCLUDED.currency,
            active   = TRUE
          RETURNING *`,
-        [UID, b.category, b.amount, b.currency || 'EUR', b.period || 'monthly']
+        [req.user.id, b.category, b.amount, b.currency || 'EUR', b.period || 'monthly']
       );
       results.push(rows[0]);
     }
@@ -212,7 +211,7 @@ router.get('/summary', async (req, res, next) => {
          AND TO_CHAR(txn_date, 'YYYY-MM') = $2
        GROUP BY type, category
        ORDER BY type, total DESC`,
-      [UID, month]
+      [req.user.id, month]
     );
 
     let total_income = 0, total_expenses = 0;

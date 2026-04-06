@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET /weekly — list weekly reviews
 router.get('/weekly', async (req, res, next) => {
@@ -12,7 +11,7 @@ router.get('/weekly', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM weekly_reviews WHERE user_id = $1 AND archived_at IS NULL
        ORDER BY week_start DESC LIMIT $2`,
-      [UID, limit]
+      [req.user.id, limit]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -43,7 +42,7 @@ router.post('/weekly', validate(z.object({
          mood_avg        = EXCLUDED.mood_avg,
          metadata        = EXCLUDED.metadata
        RETURNING *`,
-      [UID, week_start, hours_logged, reflection, wins, blockers, next_week_focus, mood_avg,
+      [req.user.id, week_start, hours_logged, reflection, wins, blockers, next_week_focus, mood_avg,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -55,7 +54,7 @@ router.get('/weekly/:week', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM weekly_reviews WHERE user_id = $1 AND week_start = $2 AND archived_at IS NULL`,
-      [UID, req.params.week]
+      [req.user.id, req.params.week]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Review not found' });
     res.json(rows[0]);
@@ -78,7 +77,7 @@ router.patch('/weekly/:week', async (req, res, next) => {
        WHERE user_id = $8 AND week_start = $9 RETURNING *`,
       [hours_logged, reflection, wins, blockers, next_week_focus, mood_avg,
        metadata ? JSON.stringify(metadata) : null,
-       UID, req.params.week]
+       req.user.id, req.params.week]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Review not found' });
     res.json(rows[0]);

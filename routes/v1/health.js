@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list health logs
 router.get('/', async (req, res, next) => {
@@ -11,7 +10,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM health_logs WHERE user_id = $1 ORDER BY log_date DESC LIMIT $2`,
-      [UID, limit]
+      [req.user.id, limit]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -42,7 +41,7 @@ router.post('/', validate(z.object({
          notes         = EXCLUDED.notes,
          metadata      = EXCLUDED.metadata
        RETURNING *`,
-      [UID, log_date, mood, energy, sleep_hours, sleep_quality, weight_kg, notes,
+      [req.user.id, log_date, mood, energy, sleep_hours, sleep_quality, weight_kg, notes,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -54,7 +53,7 @@ router.get('/:date', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM health_logs WHERE user_id = $1 AND log_date = $2',
-      [UID, req.params.date]
+      [req.user.id, req.params.date]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Health log not found' });
     res.json(rows[0]);
@@ -77,7 +76,7 @@ router.patch('/:date', async (req, res, next) => {
        WHERE user_id = $8 AND log_date = $9 RETURNING *`,
       [mood, energy, sleep_hours, sleep_quality, weight_kg, notes,
        metadata ? JSON.stringify(metadata) : null,
-       UID, req.params.date]
+       req.user.id, req.params.date]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Health log not found' });
     res.json(rows[0]);

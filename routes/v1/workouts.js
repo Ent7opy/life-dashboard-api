@@ -3,7 +3,6 @@ const { pool } = require('../../db/pool');
 const { validate } = require('../../middleware/validate');
 const { z } = require('zod');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — list workouts
 router.get('/', async (req, res, next) => {
@@ -11,7 +10,7 @@ router.get('/', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT * FROM workouts WHERE user_id = $1 AND archived_at IS NULL
        ORDER BY workout_date DESC`,
-      [UID]
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -32,7 +31,7 @@ router.post('/', validate(z.object({
     const { rows } = await pool.query(
       `INSERT INTO workouts (user_id, type, workout_date, name, duration_min, calories, notes, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [UID, type, workout_date || null, name, duration_min, calories, notes,
+      [req.user.id, type, workout_date || null, name, duration_min, calories, notes,
        metadata ? JSON.stringify(metadata) : '{}']
     );
     res.status(201).json(rows[0]);
@@ -44,7 +43,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM workouts WHERE id = $1 AND user_id = $2 AND archived_at IS NULL',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Workout not found' });
     const { rows: sets } = await pool.query(
@@ -71,7 +70,7 @@ router.patch('/:id', async (req, res, next) => {
        WHERE id = $8 AND user_id = $9 RETURNING *`,
       [type, workout_date, name, duration_min, calories, notes,
        metadata ? JSON.stringify(metadata) : null,
-       req.params.id, UID]
+       req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Workout not found' });
     res.json(rows[0]);
@@ -83,7 +82,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     await pool.query(
       'UPDATE workouts SET archived_at = NOW() WHERE id = $1 AND user_id = $2',
-      [req.params.id, UID]
+      [req.params.id, req.user.id]
     );
     res.status(204).send();
   } catch (err) { next(err); }

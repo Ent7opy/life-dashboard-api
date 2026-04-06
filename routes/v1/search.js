@@ -1,7 +1,6 @@
 const router = require('express').Router();
 const { pool } = require('../../db/pool');
 
-const UID = process.env.DEFAULT_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 // GET / — full text search across multiple tables
 router.get('/', async (req, res, next) => {
@@ -18,35 +17,35 @@ router.get('/', async (req, res, next) => {
       pool.query(
         `SELECT id, 'note' AS type, COALESCE(title, LEFT(body, 60)) AS title, LEFT(body, 120) AS snippet
          FROM notes WHERE user_id = $1 AND archived_at IS NULL AND (title ILIKE $2 OR body ILIKE $2)
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'resource' AS type, title, COALESCE(author, '') AS snippet
          FROM resources WHERE user_id = $1 AND archived_at IS NULL AND (title ILIKE $2 OR author ILIKE $2)
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'contact' AS type, name AS title, COALESCE(relationship, '') AS snippet
          FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND name ILIKE $2
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'project' AS type, name AS title, COALESCE(description, '') AS snippet
          FROM projects WHERE user_id = $1 AND archived_at IS NULL AND (name ILIKE $2 OR description ILIKE $2)
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'goal' AS type, title, COALESCE(description, '') AS snippet
          FROM goals WHERE user_id = $1 AND archived_at IS NULL AND title ILIKE $2
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'media' AS type, title, COALESCE(creator, '') AS snippet
          FROM media_items WHERE user_id = $1 AND archived_at IS NULL AND title ILIKE $2
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'skill' AS type, name AS title, COALESCE(category, '') AS snippet
          FROM skills WHERE user_id = $1 AND archived_at IS NULL AND name ILIKE $2
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
       pool.query(
         `SELECT id, 'hobby' AS type, name AS title, COALESCE(description, '') AS snippet
          FROM hobbies WHERE user_id = $1 AND archived_at IS NULL AND name ILIKE $2
-         LIMIT 10`, [UID, like]),
+         LIMIT 10`, [req.user.id, like]),
     ]);
 
     const results = [
